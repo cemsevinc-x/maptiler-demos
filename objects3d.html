@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>3D objects on a map</title>
+
+<script src="https://cdn.maptiler.com/maptiler-sdk-js/v4.1.0/maptiler-sdk.umd.min.js"></script>
+<link href="https://cdn.maptiler.com/maptiler-sdk-js/v4.1.0/maptiler-sdk.css" rel="stylesheet">
+<script src="https://cdn.maptiler.com/maptiler-3d/v4.0.1/maptiler-3d.umd.min.js"></script>
+<script src="config.js"></script>
+
+<style>
+  html, body { margin: 0; height: 100%; font: 14px system-ui, sans-serif; color: #eef1f5; }
+  #map { position: absolute; inset: 0; }
+
+  #panel {
+    position: absolute; top: 14px; left: 14px; z-index: 2; width: 300px;
+    background: rgba(18,22,30,.9); border-radius: 12px; padding: 15px;
+    box-shadow: 0 2px 18px rgba(0,0,0,.5); backdrop-filter: blur(8px);
+  }
+  h1 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+  .sub { margin: 0 0 13px; font-size: 12px; color: #8b95a6; }
+
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+           color: #6b7688; margin: 12px 0 5px; }
+  .row { display: flex; gap: 7px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 12.5px; padding: 6px 12px; cursor: pointer;
+    border: 1px solid #39435a; border-radius: 8px;
+    background: transparent; color: #aab4c4;
+  }
+  button.on { background: #2563eb; border-color: #2563eb; color: #fff; }
+  button:disabled { opacity: .4; cursor: default; }
+
+  input[type=range] { width: 100%; margin: 4px 0 0; }
+
+  #read { margin-top: 13px; font: 12px/1.7 ui-monospace, Menlo, monospace;
+          color: #cbd5e3; border-top: 1px solid #2a3344; padding-top: 11px; }
+  #read b { color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+  <h1>3D objects</h1>
+  <p class="sub">glTF meshes placed on the map by coordinate.</p>
+
+  <div class="label">add a mesh</div>
+  <div class="row">
+    <button id="addDuck">Duck</button>
+    <button id="addMan">Walking man</button>
+    <button id="clear">Clear</button>
+  </div>
+
+  <div class="label">scale</div>
+  <input type="range" id="scale" min="10" max="800" value="200">
+
+  <div class="label">heading</div>
+  <input type="range" id="heading" min="0" max="359" value="0">
+
+  <div class="label">appearance</div>
+  <div class="row">
+    <button id="wire">Wireframe</button>
+    <button id="fade">Half opacity</button>
+    <button id="anim" disabled>Play animation</button>
+  </div>
+
+  <div id="read">Loading the map…</div>
+</div>
+
+<script>
+maptilersdk.config.apiKey = API_KEY;
+
+const MESHES = {
+  duck: {
+    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb',
+    scale: 200
+  },
+  man: {
+    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CesiumMan/glTF-Binary/CesiumMan.glb',
+    scale: 300
+  }
+};
+
+const HERE = { lng: -0.1246, lat: 51.5007 };   // Westminster
+
+const map = new maptilersdk.Map({
+  container: 'map',
+  style: maptilersdk.MapStyle.STREETS,
+  center: [HERE.lng, HERE.lat],
+  zoom: 17,
+  pitch: 60,
+  bearing: -20,
+  maxPitch: 85
+});
+
+const read = document.getElementById('read');
+let layer3D = null;
+let current = null;
+let wireOn = false, fadeOn = false;
+
+function say(html) { read.innerHTML = html; }
+
+// The layer is a normal map layer holding a 3D scene. It has to wait for the
+// map, same as any other layer.
+map.on('load', function () {
+  layer3D = new maptiler3d.Layer3D('objects');
+  map.addLayer(layer3D);
+  layer3D.setAmbientLight({ intensity: 2 });
+  layer3D.addPointLight('sun', { lngLat: HERE, altitude: 1500, intensity: 30 });
+  say('Layer ready. Add a mesh.');
+});
+
+async function add(kind) {
+  if (!layer3D) return;
+  say('downloading the mesh…');
+
+  const m = MESHES[kind];
+  const t0 = performance.now();
+
+  // adding the same id twice throws, so take the old one out first
+  try { layer3D.removeMesh(kind); } catch (e) {}
+
+  current = await layer3D.addMeshFromURL(kind, m.url, {
+    lngLat: HERE,
+    scale: Number(document.getElementById('scale').value),
+    heading: Number(document.getElementById('heading').value),
+    altitude: 0,
+    altitudeReference: maptiler3d.AltitudeReference.GROUND
+  });
+
+  const took = Math.round(performance.now() - t0);
+  const names = current.getAnimationNames ? current.getAnimationNames() : [];
+
+  document.getElementById('anim').disabled = names.length === 0;
+
+  say('<b>' + kind + '</b> placed in ' + took + ' ms<br>' +
+      'at ' + HERE.lng.toFixed(4) + ', ' + HERE.lat.toFixed(4) + '<br>' +
+      'animations  ' + (names.length ? names.join(', ') : 'none'));
+}
+
+document.getElementById('addDuck').onclick = () => add('duck');
+document.getElementById('addMan').onclick  = () => add('man');
+
+// item.remove() exists on Item3D, but clearing from the layer side is the
+// one that reliably empties the scene, and it also copes with a mesh that
+// was added twice under the same id.
+document.getElementById('clear').onclick = () => {
+  if (!layer3D) return;
+  layer3D.clear();
+  current = null;
+  document.getElementById('anim').disabled = true;
+  ['wire','fade','anim'].forEach(id => document.getElementById(id).classList.remove('on'));
+  wireOn = fadeOn = false;
+  say('Cleared.');
+};
+
+document.getElementById('scale').oninput = (e) => {
+  if (current) current.setScale(Number(e.target.value));
+};
+
+document.getElementById('heading').oninput = (e) => {
+  if (current) current.setHeading(Number(e.target.value));
+};
+
+document.getElementById('wire').onclick = function () {
+  if (!current) return;
+  wireOn = !wireOn;
+  current.setWireframe(wireOn);
+  this.classList.toggle('on', wireOn);
+};
+
+document.getElementById('fade').onclick = function () {
+  if (!current) return;
+  fadeOn = !fadeOn;
+  current.setOpacity(fadeOn ? 0.4 : 1);
+  this.classList.toggle('on', fadeOn);
+};
+
+document.getElementById('anim').onclick = function () {
+  if (!current) return;
+  const names = current.getAnimationNames();
+  if (!names.length) return;
+  current.playAnimation(names[0], 'loop');
+  this.classList.add('on');
+  say('playing <b>' + names[0] + '</b>');
+};
+</script>
+</body>
+</html>
