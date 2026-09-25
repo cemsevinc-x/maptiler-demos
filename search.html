@@ -90,8 +90,11 @@ function build() {
 
   map.addControl(control, 'top-right');
 
-  control.addEventListener('pick', function (e) {
-    const f = e.detail;
+  // The control extends Evented, so it is .on(), not addEventListener.
+  // Getting that wrong throws, the script stops, and everything below it
+  // silently never runs.
+  control.on('pick', function (e) {
+    const f = e.detail || e;
     if (!f) { read.innerHTML = '<i>cleared</i>'; return; }
     read.innerHTML =
       '<b>' + f.place_name + '</b><br>' +
@@ -99,10 +102,11 @@ function build() {
       '<i>centre</i>  ' + f.center.map(n => n.toFixed(4)).join(', ');
   });
 
-  control.addEventListener('response', function (e) {
-    const n = (e.detail.featureCollection.features || []).length;
-    read.innerHTML = '<i>' + n + ' result' + (n === 1 ? '' : 's') + ' for "' +
-                     e.detail.searchText + '"</i>';
+  control.on('response', function (e) {
+    const d = e.detail || e;
+    const n = ((d.featureCollection || {}).features || []).length;
+    read.innerHTML = '<i>' + n + ' result' + (n === 1 ? '' : 's') +
+                     (d.searchText ? ' for "' + d.searchText + '"' : '') + '</i>';
   });
 }
 
