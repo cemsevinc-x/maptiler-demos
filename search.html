@@ -55,6 +55,12 @@
     <button data-c="tr">Türkiye</button>
   </div>
 
+  <div class="label">what to search for</div>
+  <div class="row">
+    <button id="poi">Include places of interest</button>
+    <button id="near">Prefer what is nearby</button>
+  </div>
+
   <div class="label">reverse geocoding</div>
   <div class="row">
     <button id="rev">Click the map to look up a point</button>
@@ -86,6 +92,8 @@ const read = document.getElementById('read');
 let control = null;
 let country = 'gb';
 let reverse = false;
+let poi = false;
+let near = false;
 
 function build() {
   control = new maptilerGeocoder.GeocodingControl({
@@ -138,6 +146,30 @@ document.querySelectorAll('[data-c]').forEach(function (b) {
                      ', try searching for a street or a town</i>';
   };
 });
+
+// Points of interest are not searched by default, so "Monument" finds streets
+// called Monument Something and not the monument itself.
+document.getElementById('poi').onclick = function () {
+  poi = !poi;
+  this.classList.toggle('on', poi);
+  control.setOptions({
+    types: poi ? ['poi', 'place', 'address', 'road', 'postal_code'] : undefined
+  });
+  read.innerHTML = '<i>' + (poi
+    ? 'places of interest included, search Monument again'
+    : 'back to the default, which leaves places of interest out') + '</i>';
+};
+
+// proximity biases results towards a point rather than filtering by it
+document.getElementById('near').onclick = function () {
+  near = !near;
+  this.classList.toggle('on', near);
+  const c = map.getCenter();
+  control.setOptions({ proximity: near ? [{ type: 'map-center' }] : undefined });
+  read.innerHTML = '<i>' + (near
+    ? 'results now favour whatever the map is centred on'
+    : 'no location bias') + '</i>';
+};
 
 document.getElementById('rev').onclick = function () {
   reverse = !reverse;
