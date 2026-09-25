@@ -66,6 +66,15 @@
 <script>
 maptilersdk.config.apiKey = API_KEY;
 
+// where each filter sends the map, so picking a country actually shows you
+// somewhere you can search in
+const VIEWS = {
+  '':   { center: [10, 30],       zoom: 2   },
+  'gb': { center: [-0.105, 51.515], zoom: 10 },
+  'cz': { center: [14.42, 50.09],   zoom: 10 },
+  'tr': { center: [28.98, 41.02],   zoom: 10 }
+};
+
 const map = new maptilersdk.Map({
   container: 'map',
   style: maptilersdk.MapStyle.STREETS,
@@ -124,7 +133,9 @@ document.querySelectorAll('[data-c]').forEach(function (b) {
       country: country || undefined,
       placeholder: country ? 'Search in ' + country.toUpperCase() : 'Search anywhere'
     });
-    read.innerHTML = '<i>country = ' + (country || 'none') + '</i>';
+    map.flyTo({ ...VIEWS[country], duration: 1600 });
+    read.innerHTML = '<i>country = ' + (country || 'none') +
+                     ', try searching for a street or a town</i>';
   };
 });
 
