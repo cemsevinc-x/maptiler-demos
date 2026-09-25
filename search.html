@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search control</title>
+
+<script src="https://cdn.maptiler.com/maptiler-sdk-js/v4.1.0/maptiler-sdk.umd.min.js"></script>
+<link href="https://cdn.maptiler.com/maptiler-sdk-js/v4.1.0/maptiler-sdk.css" rel="stylesheet">
+<script src="https://cdn.maptiler.com/maptiler-geocoding-control/v3.0.0/maptilersdk.umd.js"></script>
+<script src="config.js"></script>
+
+<style>
+  html, body { margin: 0; height: 100%; font: 14px system-ui, sans-serif; color: #eef1f5; }
+  #map { position: absolute; inset: 0; }
+
+  #panel {
+    position: absolute; bottom: 14px; left: 14px; z-index: 2; width: 320px;
+    background: rgba(18,22,30,.9); border-radius: 12px; padding: 15px;
+    box-shadow: 0 2px 18px rgba(0,0,0,.5); backdrop-filter: blur(8px);
+  }
+  h1 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+  .sub { margin: 0 0 12px; font-size: 12px; color: #8b95a6; }
+
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+           color: #6b7688; margin: 11px 0 5px; }
+  .row { display: flex; gap: 7px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 12.5px; padding: 6px 12px; cursor: pointer;
+    border: 1px solid #39435a; border-radius: 8px;
+    background: transparent; color: #aab4c4;
+  }
+  button.on { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+  #read { margin-top: 12px; font: 12px/1.7 ui-monospace, Menlo, monospace;
+          color: #cbd5e3; border-top: 1px solid #2a3344; padding-top: 10px;
+          max-height: 150px; overflow: auto; }
+  #read b { color: #fff; }
+  #read i { color: #8b95a6; font-style: normal; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+  <h1>Search control</h1>
+  <p class="sub">The ready-made search box, rather than wiring geocoding up by hand.</p>
+
+  <div class="label">restrict the search</div>
+  <div class="row">
+    <button data-c="">Worldwide</button>
+    <button data-c="gb" class="on">UK only</button>
+    <button data-c="cz">Czechia</button>
+    <button data-c="tr">Türkiye</button>
+  </div>
+
+  <div class="label">reverse geocoding</div>
+  <div class="row">
+    <button id="rev">Click the map to look up a point</button>
+  </div>
+
+  <div id="read">Type in the box at the top right.</div>
+</div>
+
+<script>
+maptilersdk.config.apiKey = API_KEY;
+
+const map = new maptilersdk.Map({
+  container: 'map',
+  style: maptilersdk.MapStyle.STREETS,
+  center: [-0.105, 51.515],
+  zoom: 11
+});
+
+const read = document.getElementById('read');
+let control = null;
+let country = 'gb';
+let reverse = false;
+
+function build() {
+  control = new maptilerGeocoder.GeocodingControl({
+    country: country || undefined,
+    placeholder: country ? 'Search in ' + country.toUpperCase() : 'Search anywhere',
+    enableReverse: reverse,
+    limit: 5,
+    showResultsWhileTyping: true,
+    markerOnSelected: true
+  });
+
+  map.addControl(control, 'top-right');
+
+  control.addEventListener('pick', function (e) {
+    const f = e.detail;
+    if (!f) { read.innerHTML = '<i>cleared</i>'; return; }
+    read.innerHTML =
+      '<b>' + f.place_name + '</b><br>' +
+      '<i>type</i>    ' + (f.place_type || []).join(', ') + '<br>' +
+      '<i>centre</i>  ' + f.center.map(n => n.toFixed(4)).join(', ');
+  });
+
+  control.addEventListener('response', function (e) {
+    const n = (e.detail.featureCollection.features || []).length;
+    read.innerHTML = '<i>' + n + ' result' + (n === 1 ? '' : 's') + ' for "' +
+                     e.detail.searchText + '"</i>';
+  });
+}
+
+// a control does not need to wait for the style, unlike a layer
+build();
+
+// setOptions merges into what is already there, so the control does not
+// have to be removed and rebuilt to change a filter.
+document.querySelectorAll('[data-c]').forEach(function (b) {
+  b.onclick = function () {
+    document.querySelectorAll('[data-c]').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    country = b.dataset.c;
+    control.setOptions({
+      country: country || undefined,
+      placeholder: country ? 'Search in ' + country.toUpperCase() : 'Search anywhere'
+    });
+    read.innerHTML = '<i>country = ' + (country || 'none') + '</i>';
+  };
+});
+
+document.getElementById('rev').onclick = function () {
+  reverse = !reverse;
+  this.classList.toggle('on', reverse);
+  control.setOptions({ enableReverse: reverse });
+  read.innerHTML = '<i>reverse geocoding ' + (reverse ? 'on, click the map' : 'off') + '</i>';
+};
+</script>
+</body>
+</html>
